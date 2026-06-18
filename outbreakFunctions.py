@@ -7,11 +7,11 @@ import math
 
 class ODEsClass:
     
-    def __init__(self, ageGrpParams, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days):
+    def __init__(self, ageGrpParams, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure):
         self.params = SimpleNamespace(**ageGrpParams)
         self.params.eta1 = eta
         self.params.eta2 = 0.8*eta
-        
+        self.schoolClosure = schoolClosure
         self.params.lockdown1Start = lockdown1Start
         self.params.lockdown1End = lockdown1End
         self.params.lockdown2Start = lockdown2Start
@@ -19,12 +19,14 @@ class ODEsClass:
         self.params.outbreak2Start = outbreak2Start
         self.params.days = days
         
-        self.InitialVals = list(self.params.compartments.values()) 
+        self.InitialVals = list(self.params.compartments.values()) # all 40 initial vals from modelParameters
         
     def betaFunc(self, time, var, ageGrp):
         beta = self.params.__dict__[var][ageGrp]
         
-        if self.params.lockdown1Start < time <= self.params.lockdown1End:
+        if ((self.schoolClosure == False) and (ageGrp == 0)): # if schools are open, children-to-children transmission is unchanged by lockdown
+            newBeta = beta 
+        elif self.params.lockdown1Start < time <= self.params.lockdown1End:
             newBeta = (beta/self.params.compliance)*(1 + (self.params.compliance - 1)*np.exp(-(time - self.params.lockdown1Start)))
         elif self.params.lockdown2Start < time <= self.params.lockdown2End:
             newBeta = (beta/self.params.compliance)*(1 + (self.params.compliance - 1)*np.exp(-(time - self.params.lockdown2Start)))
@@ -37,6 +39,7 @@ class ODEsClass:
         return newBeta
     
 
+        # define all variables in a new local scope
     def defineVars(self, IVS, FOI1, FOI2, state):
 
         S_U = {0: self.params.omega1*IVS[30] - FOI1*IVS[0]/self.params.N,
@@ -288,13 +291,13 @@ class ODEsClass:
     
 class simAllAges:
 
-    def __init__(self, allAgeGrpParams, eta, vaccineStart, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days):
+    def __init__(self, allAgeGrpParams, eta, vaccineStart, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure):
         
         youngAgeGrp, adultAgeGrp, elderlyAgeGrp = allAgeGrpParams
 
-        self.youngSim = ODEsClass(youngAgeGrp, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days)
-        self.adultSim = ODEsClass(adultAgeGrp, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days)
-        self.elderlySim = ODEsClass(elderlyAgeGrp, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days)
+        self.youngSim = ODEsClass(youngAgeGrp, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure)
+        self.adultSim = ODEsClass(adultAgeGrp, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure = True)
+        self.elderlySim = ODEsClass(elderlyAgeGrp, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure = True)
         
         self.outputs = []
         
@@ -538,3 +541,9 @@ class simAllAges:
                 vaccDaysArray.append(vaccinationStart)
         
         return(vaccDaysArray)
+        
+    def printEndResults(self, age):
+        results = self.outbreakEndResults(age)
+        print("Over the course of the outbreak,", results[0], "people were hospitalised.")
+        print("Over the course of the outbreak,", results[1], "people died.")
+        print(results[2], "people have been vaccinated -", math.ceil(self.outputs[age][1][-1]), "successfully.") 
