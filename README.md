@@ -10,4 +10,5 @@ It is also possible to create triangle plots with this information, varying the 
 
 Finally, the two `.py` files allow all cost functions and the model itself to be easily called in other notebooks. Simply `import costFunctions.py` or `import outbreakFunctions.py` to use them.
 
-I have attempted to add sufficient description in each notebook so that this code can be understood without reading the full report.
+The full report can be found at
+https://drive.google.com/file/d/1MPaPtccj4JFY0adfJjeGSEaZCq1Wnavr/view
