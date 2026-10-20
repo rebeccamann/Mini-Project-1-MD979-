@@ -11,11 +11,16 @@ import datetime
 import outbreakFunctions
 
 
+# The function QALY_GDPloss returns:
+# - totalQALY, an array of 3 elements, each corresponding to the QALY loss for a vaccine efficacy in efficaciesArray
+# - totalGDPloss, a single value corresponding to the GDP loss over lockdown, and school closure (if applicable)
+
 def QALY_GDPloss(allAgeGrpParams, efficaciesArray, vaccineStart, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure):
     
     totalCost = 0
     totalQALY = []
-    
+
+    # loop over efficaciesArray
     for i in range(len(efficaciesArray)):
         
         simulation = outbreakFunctions.simAllAges(allAgeGrpParams, efficaciesArray[i], vaccineStart, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure)
@@ -38,10 +43,14 @@ def QALY_GDPloss(allAgeGrpParams, efficaciesArray, vaccineStart, lockdown1Start,
     if schoolClosure==True:
         totalGDPloss = (dailyGDPloss+ 70000000)*((lockdown1End - lockdown1Start) + (lockdown2End - lockdown2Start)) # if schools closed add 0.2bn GDP loss daily
     else:
-        totalGDPloss = dailyGDPloss*((lockdown1End - lockdown1Start) + (lockdown2End - lockdown2Start))
+        totalGDPloss = dailyGDPloss*((lockdown1End - lockdown1Start) + (lockdown2End - lockdown2Start)) # if schools open
     
     return(totalQALY, totalGDPloss)
 
+
+# totalCost takes the willingness to pay, W, totalQALY and totalGDPloss (returned from QALY_GDPloss above), and an array of vaccine efficacy weights
+# weights must be an array of the same length as efficaciesArray, where each element corresponds to the weight of the vaccine efficacy.
+# the function iterates through the efficacies and calculates the net monetary loss for each, weighting it accordingly. Their sum is returned.
 
 def totalCost(W, totalQALY, totalGDPloss, weights):
     totalCost=0
@@ -51,6 +60,11 @@ def totalCost(W, totalQALY, totalGDPloss, weights):
         totalCost += weights[i] * netMonetaryLoss
     return(totalCost)
 
+
+# QALY_GDParrays takes the same inputs as QALY_GDPloss, as well as an array of weeks, wks, and a variable whichLockdownVaried, which is either 1 or 2.
+# Depending on which lockdown length is to be varied, the function iterates through the 'wks' of that lockdown and calculates QALY and GDP loss for each
+# The function returns two arrays, QALYarray and GDParray, which contain the QALY and GDP losses for each week in 'wks'.#
+# Note that whichever lockdown is not being varied is kept constant at 4 weeks (28 days).
 
 def QALY_GDParrays(allAgeGrpParams, efficaciesArray, vaccineStart, lockdown1Start, lockdown2Start, whichLockdownVaried , wks, outbreak2Start, days, schoolClosure):
     
@@ -82,6 +96,8 @@ def QALY_GDParrays(allAgeGrpParams, efficaciesArray, vaccineStart, lockdown1Star
     
     return(QALYarray, GDParray)
 
+
+# get_category categorises a number of weeks into one of 6 categories.
 def get_category(weeks):
     if weeks == 0:
         return 0
@@ -95,6 +111,11 @@ def get_category(weeks):
         return 4
     else:
         return 5
+
+
+# optimalLockdownCategories runs the function QALY_GDParrays (above) to get two arrays of QALY and GDP loss for each week of lockdown
+# It then iterates through every possible weighting combination (w1,w2,w3) for the three vaccine efficacies, and calculates the cost for each week of lockdown
+# The week with the minimum cost is then categorised using get_category() above, and appended to an array resultsCat which is then returned alongside the corresponding weights.
     
 def optimalLockdownCategories(allAgeGrpParams, efficaciesArray, vaccineStart, lockdown1Start, lockdown2Start, whichLockdownVaried, W, wks, n, outbreak2Start, days, schoolClosure):
     QALYarray, GDParray = QALY_GDParrays(allAgeGrpParams, efficaciesArray, vaccineStart, lockdown1Start, lockdown2Start, whichLockdownVaried, wks, outbreak2Start, days, schoolClosure)
@@ -102,7 +123,7 @@ def optimalLockdownCategories(allAgeGrpParams, efficaciesArray, vaccineStart, lo
     weekIncrement = wks[1] - wks[0]
     w1,w2,w3 = [],[],[]
     resultsCat = []
-    resultsLoss = []
+    #resultsLoss = []
     
     for i in range(n + 1):
         for j in range(n + 1 - i):
@@ -119,10 +140,14 @@ def optimalLockdownCategories(allAgeGrpParams, efficaciesArray, vaccineStart, lo
 
             optimalLockdown = costArray.index(min(costArray))*weekIncrement
             resultsCat.append(get_category(optimalLockdown))
-            resultsLoss.append(min(costArray))
+            #resultsLoss.append(min(costArray))
 
-    return(w1,w2,w3, resultsCat, resultsLoss)
+    return(w1,w2,w3, resultsCat)
 
+
+# trianglePlotterSchoolsOpenVsClosed uses the package mpltern to produce triangular plots of optimal lockdown length for every efficacy weighting (w1,w2,w3)
+# It takes as input the willingness to pay, W, and two arrays each containing the weighting combinations and optimal lockdown length categories.
+# Each category is given a colour, and the plots of schools open and schools closed are displayed side by side for comparison.
 
 def trianglePlotterSchoolsOpenVsClosed(W, schoolsOpenArray, schoolsClosedArray):    
     #unpacking the schools open/closed arrays:
@@ -185,11 +210,10 @@ def trianglePlotterSchoolsOpenVsClosed(W, schoolsOpenArray, schoolsClosedArray):
     cax = ax.inset_axes([1.05, 0.1, 0.05, 0.9], transform=ax.transAxes)
     colorbar = fig.colorbar(plot, cax=cax, ticks=[0.5,1.5,2.5,3.5,4.5, 5.5])
     colorbar.ax.set_yticklabels(['None', '1-5 weeks', '6-10 weeks', '11-15 weeks', '16-20 weeks', '21+ weeks'])
-    colorbar.set_label("Weeks of Lockdown 1", rotation=270, fontsize = 15, va="baseline")
+    colorbar.set_label("Weeks of Lockdown", rotation=270, fontsize = 15, va="baseline")
 
+    # UNCOMMENT TO SAVE FIGURE:
 
-
-    
     # filename = input('filename >> ')
     # if filename != 'x':
     #     plt.savefig(f'{filename}{str(datetime.datetime.now())[11:19]}.png', bbox_inches='tight') # Add this to save the figures
