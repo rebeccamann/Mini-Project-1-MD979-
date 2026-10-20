@@ -5,6 +5,7 @@ import json
 from types import SimpleNamespace
 import math
 
+# A class to contain all ODEs for a single age group
 class ODEsClass:
     
     def __init__(self, ageGrpParams, eta, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure):
@@ -20,7 +21,8 @@ class ODEsClass:
         self.params.days = days
         
         self.InitialVals = list(self.params.compartments.values()) # all 40 initial vals from modelParameters
-        
+
+    # betaFunc calculates the transmission rate for a group, dependent on lockdown status    
     def betaFunc(self, time, var, ageGrp):
         beta = self.params.__dict__[var][ageGrp]
         
@@ -39,7 +41,11 @@ class ODEsClass:
         return newBeta
     
 
-        # define all variables in a new local scope
+    # define all compartments and their differential equations. The four states are:
+    # 0: no vaccine, no outbreak 2
+    # 1: vaccine, no outbreak 2
+    # 2: no vaccine, outbreak 2
+    # 3: vaccine, outbreak 2
     def defineVars(self, IVS, FOI1, FOI2, state):
 
         S_U = {0: self.params.omega1*IVS[30] - FOI1*IVS[0]/self.params.N,
@@ -288,7 +294,7 @@ class ODEsClass:
 
         return Y 
     
-    
+# This class solves the ODEs for each group simultaneously - allowing them to interact with eachother through the force of infection (FOI) term    
 class simAllAges:
 
     def __init__(self, allAgeGrpParams, eta, vaccineStart, lockdown1Start, lockdown1End, lockdown2Start, lockdown2End, outbreak2Start, days, schoolClosure):
@@ -327,7 +333,8 @@ class simAllAges:
         ageIVS = [IVSyoung, IVSadult, IVSelderly]
         
         diffeqs = []
-        
+
+        # for each age group, calculate the force of infection (FOI) and define differential equations for each compartment
         for j, age in enumerate(self.ageGroups):
             FOI1 = 0
             FOI2 = 0
@@ -399,6 +406,7 @@ class simAllAges:
         
         activeEvents = [elderlyVaccStart, adultVaccStart, youngVaccStart, outbreak2Starting]
         while timeAtLastEvent < self.days:
+            # solve the differential equation until next event
             sol = spi.solve_ivp(
                 self.SEIHRVDmodel, 
                 (timeAtLastEvent, self.days), 
@@ -411,7 +419,8 @@ class simAllAges:
             valuesArray.append(sol.y.T[1:])
             timeAtLastEvent = sol.t[-1]
             currentIVS = sol.y.T[-1]
-            
+
+            # if an event has occurred, determine which event it was and update the state accordingly
             for i, eventName in enumerate(sol.t_events):
                 if eventName.size > 0: 
                     event = activeEvents[i].name
@@ -429,7 +438,8 @@ class simAllAges:
                     if event == "outbreak2":
                         self.events['outbreak2Start'] = sol.t_events[i][0]
                         outbreak2Bit = 0b1
-                        
+
+                        # NEEDS CHANGING: if outbreak2 has started, seed infecion in each age group
                         currentIVS[7] += 100
                         currentIVS[16] += 100
                         currentIVS[17] += 100
@@ -451,7 +461,8 @@ class simAllAges:
         valuesYoung = []
         valuesAdult = []
         valuesElderly = []
-        
+
+        # split valuesArray into three separate arrays for each age group
         for v in valuesArray:
             valueLength = len(v[0])
             for l in v:
@@ -462,6 +473,7 @@ class simAllAges:
         
         total_values = [ valuesYoung , valuesAdult, valuesElderly]
 
+        # function for summing over consecutive indices of an array
         def totalAdderConsec(j, lower, upper):
             nonlocal total_values
             totalArray = []
@@ -473,7 +485,8 @@ class simAllAges:
                 totalArray.append(total)
                 
             return totalArray
-        
+
+        # function for summing over non-consecutive indices of an array
         def totalAdderIndices(j, indices):
             nonlocal total_values
             totalArray = []
@@ -486,10 +499,11 @@ class simAllAges:
             return totalArray
         
         self.outputs = []
-        
+
+        # combining vaccinated and unvaccinated compartments to get total values
         for i, age in enumerate(self.ageGroups):
         
-            total_susceptible1 = totalAdderConsec(i, 0, 2)
+            total_susceptible1 = totalAdderConsec(i, 0, 2) 
             total_susceptible2 = totalAdderConsec(i, 3, 4)
             total_exposed1 = totalAdderConsec(i, 5, 6)
             total_exposed2 = totalAdderConsec(i, 7,9)
@@ -517,7 +531,7 @@ class simAllAges:
         
         return(self.outputs)
     
-    
+    # return the total number of hospitalisations, deaths and vaccinations for a given age group at the end of the simulation
     def outbreakEndResults(self, age):
         
         if len(self.outputs) == 0: 
@@ -529,7 +543,8 @@ class simAllAges:
         self.totalVaccinated = math.ceil(self.outputs[age][0][12][-1])
         
         return(self.totalHospitalised, self.totalDead, self.totalVaccinated)
-    
+
+    # return the day on which vaccination started for each age group
     def getVaccineDays(self):
         
         vaccDaysArray = []
